@@ -1,0 +1,15 @@
+
+**.so
+**.a
+**.egg
+**.jpg
+**.xml
+**.png
+**.avi
+**.mp4
+
+**cmake-build-debug/
+**.idea/
+**bin/
+**build/
+**CMakeFiles/
