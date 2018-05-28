@@ -1,11 +1,11 @@
 FROM nvidia/cuda:8.0-cudnn7-devel-ubuntu16.04
-LABEL maintainer="lichangW@cj.com"
+LABEL maintainer="aaronmarkham@fb.com"
 
 # caffe2 install with gpu support
 
 RUN sed -i s/archive.ubuntu.com/mirrors.163.com/g /etc/apt/sources.list
 RUN sed -i s/security.ubuntu.com/mirrors.163.com/g /etc/apt/sources.list
-# 这两个 NVIDIA source list 更新存在问题
+# �~Y两个 NVIDIA source list �~[��~V��~X�~\��~W��~X
 RUN rm /etc/apt/sources.list.d/cuda.list /etc/apt/sources.list.d/nvidia-ml.list
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -53,7 +53,9 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     scipy \
     setuptools \
     six \
-    tornado
+    tornado \
+    lmdb \
+    cffi
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
@@ -66,7 +68,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #RUN git clone --branch master --recursive  https://github.com/caffe2/caffe2.git
 #RUN git clone --recursive https://github.com/pytorch/pytorch.git && cd pytorch && \
 #    git submodule update --init
-RUN mkdir /pytorch
+RUN     mkdir /pytorch && /workspace
 ADD pytorch.tar /pytorch/
 RUN cd /pytorch && mkdir build && cd build && \
      cmake .. \
@@ -79,3 +81,4 @@ RUN cd /pytorch && mkdir build && cd build && \
      && cd .. \
      && rm -rf build
 ENV PYTHONPATH /usr/local
+WORKDIR /workspace
