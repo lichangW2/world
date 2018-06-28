@@ -1,11 +1,12 @@
-##
+#!/bin/python
 ## 可用base: reg.qiniu.com/avaprd/pytorch0.4.0-python3.6-conda3-nvvl:20180528
 ##
 ##
-import sys,os
+import sys, os
 import traceback
 import numpy as np
 
+import torch
 import torch.utils.data
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,18 +14,20 @@ import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
 
-if sys.version_info[0]==2:
+if sys.version_info[0] == 2:
     import cPickle
 else:
     import _pickle as cPickle
 
-class Data(Dataset):
+
+classes = ('plane', 'car', 'bird', 'cat',
+               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+class Data(torch.utils.data.Dataset):
     data_path = "/disk1/workspace/LichangWang/pytorch/data/cifar-10-batches-py/"
     train_list = ["data_batch_1", "data_batch_2", "data_batch_3", "data_batch_4", "data_batch_5"]
     test_list = ["test_batch"]
-    classes = ('plane', 'car', 'bird', 'cat',
-               'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0, 5), (0.5, 0.5, 0.5))])
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
     train_dt = None
     train_label = None
@@ -38,7 +41,10 @@ class Data(Dataset):
     def unpickle(self, file):
         """ load CIFAR-10  """
         with open(file, 'rb') as fo:
-            dict = cPickle.load(fo)
+            if sys.version_info[0] == 2:
+                dict = cPickle.load(fo)
+            else:
+                dict = cPickle.load(fo, encoding='latin1')
         return dict
 
     def stack_dt(self, dt_list):
@@ -53,7 +59,7 @@ class Data(Dataset):
 
         except Exception as _e:
             traceback.format_exc()
-            print  "error: ", _e
+            print("error: ", _e)
             return None, None
         return data, label
 
@@ -64,8 +70,8 @@ class Data(Dataset):
             if train_data is None or train_lb is None:
                 raise Exception("get data error")
             self.train_dt = np.concatenate(train_data)
-            self.train_dt.reshape((50000, 3, 32, 32))
-            self.train_dt.transpose((0, 2, 3, 1))  # convert to HWC for transform
+            self.train_dt = self.train_dt.reshape((50000, 3, 32, 32))
+            self.train_dt = self.train_dt.transpose((0, 2, 3, 1))  # convert to HWC for transform
             self.train_label = train_lb
         else:
             test_data, test_lb = self.stack_dt(self.test_list)
@@ -73,8 +79,8 @@ class Data(Dataset):
                 raise Exception("get data error")
 
             self.test_dt = np.concatenate(test_data)
-            self.test_dt.reshape((10000, 3, 32, 32))
-            self.test_dt.transpose((0, 2, 3, 1))
+            self.test_dt = self.test_dt.reshape((10000, 3, 32, 32))
+            self.test_dt = self.test_dt.transpose((0, 2, 3, 1))
             self.test_label = test_lb
 
     def __len__(self):
@@ -125,15 +131,19 @@ if __name__ == "__main__":
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    net.to(device)
+
     for epoch in range(2):
 
         running_loss = 0.0
         for i, data in enumerate(train_loader, 0):
             inputs, labels = data
+            inputs,labels=inputs.to(device),labels.to(device)
             optimizer.zero_grad()
 
+            print("inputs:", inputs, "labels:", labels)
             outputs = net(inputs)
-            print "labels:", labels, "\n outputs: ", outputs
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -143,4 +153,27 @@ if __name__ == "__main__":
                 print('[%d,%5d] loss: %.3f' % (epoch + 1, i + 1, running_loss / 2000))
 
     print("Finished Training")
-    torchvision.datasets.CIFAR10
+
+    print("\n Predict....")
+    # dataiter = iter(test_loader)
+    # images, labels = dataiter.next()
+    # outputs = net(images)
+    # _, pred = torch.max(outputs, 1)
+    # pred=pred.tolist()
+    # print("predict results: ",''.join('%5s'% classes[i] for i in pred))
+
+    class_correct=np.zeros(10).tolist()
+    class_total = np.zeros(10).tolist()
+    with torch.no_grad():
+        for data in test_loader:
+            images,labels=data
+            outputs = net(images)
+            _,pred=torch.max(outputs,1)
+            c=(pred==labels).squeeze()
+            for i in range(4):
+                label = labels[i]
+                class_correct[label]+=c[i].item()
+                class_total[label] += 1
+
+    for i in range(10):
+        print('Accuracy of %5s: %2d %%'%(classes[i],100*class_correct[i]/class_total[i]))
