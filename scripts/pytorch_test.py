@@ -1,3 +1,5 @@
+# -*- coding:utf-8 -*-
+
 ##
 ## 可用base: reg.qiniu.com/avaprd/pytorch0.4.0-python3.6-conda3-nvvl:20180528
 ##
@@ -19,6 +21,9 @@ class Net(nn.Module):
         self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
+
+        print("x:",x)
+
         x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
         x = F.max_pool2d(F.relu(self.conv2(x)), 2)
         x = x.view(-1, self.num_flat_features(x))
@@ -40,15 +45,15 @@ print(net)
 params = list(net.parameters())
 print(len(params))
 print(params[0].size())
-input = torch.randn(1, 1, 32, 32)
+input = torch.randn(2, 1, 32, 32)
 out = net(input)
 #out.requires_grad
 #out.requires_grad_()
 #out.grad
 net.zero_grad()
 #out.backward(torch.randn(1, 10))
-target = torch.arange(1, 11)
-target = target.view(1, -1)
+target = torch.arange(1, 21)
+target = target.view(2, -1)
 criterion = nn.MSELoss()
 
 
