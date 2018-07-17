@@ -10,7 +10,7 @@ import selectivesearch as ss
 import  numpy as np
 import  cv2
 import pickle
-from xml.dom.minidom import xml_parse
+from xml.dom.minidom import parse as xml_parse
 
 class Data(tdata.Dataset):
 
@@ -89,10 +89,8 @@ class Data(tdata.Dataset):
                     iou=self.IOU((ox0,oy0,ox1-ox0,oy1-oy1),reg["rect"])
                     one=(img,reg["rect"],i+1,iou) # 0 is background
                     self.dataset_file.append(one)
+        self.dataset_file=sorted(self.dataset_file,key=lambda dt:dt[3])
         pickle.dump(self.dataset_file,save_path)
-
-
-
 
     def save_dataset(self,path="dataset_file.pkl"):
         pickle.dump(self.dataset_file,path)
