@@ -1,0 +1,14 @@
+RCNN
+
+training:
+1. selective search
+2. cnn fine tuning
+3. SVM
+4. ridge regression
+
+testing:
+1. ss
+2. NMS
+3. image augument
+4. cnn->SVM
+5. ridge regression

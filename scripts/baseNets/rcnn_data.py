@@ -1,5 +1,8 @@
+# -*- coding: utf-8 -*-
+
 import  os, sys
 import  xml
+import random
 
 import torch
 import torch.utils.data as tdata
@@ -7,36 +10,99 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 import selectivesearch as ss
 
-import  numpy as np
-import  cv2
+import numpy as np
+import cv2
 import pickle
-from xml.dom.minidom import parse as xml_parse
+import xml.dom.minidom as xml_parse
 
 class Data(tdata.Dataset):
 
-    def __init__(self,data_path=None):
+    def __init__(self,data_path=None,model="cnn"):
 
         self.target=[0,1,2,3] # 0 is background, we just use three class of images
         self.catcher={}
 
         self.dataset_file=[]
-        if not data_path:
-            self.dataset_file = pickle.load(data_path)
+        if data_path:
+            with open(data_path,"r") as f:
+                self.dataset_file = pickle.load(f)
 
         self.cnn_iou=0.5
         self.svm_iou=0.3
-        self.model="cnn"
+        self.regression_iou=0.6
+        self.positive_num = 32  # svm and regression keep the same sample distribution
+        self.negative_num = 96
+        self.model = model
+        self.positive_set=[]
+        self.negative_set=[]
+
+        self.length = 0
+        self.positive_counter=0
+        self.negative_counter=0
+        self.positive_index=0
+        self.negative_index=0
+
+        threshold_iou=0
+
+        if self.model=="cnn":
+            threshold_iou=self.cnn_iou
+        elif self.model=="svm":
+            threshold_iou=self.svm_iou
+        else:
+            threshold_iou=self.regression_iou
+
+        if len(self.dataset_file)!=0:
+            for sample in self.dataset_file:
+                if sample["iou"] < threshold_iou:
+                    self.negative_set.append(sample)
+                else:
+                    self.positive_set.append(sample)
+
+            plength=len(self.positive_set)
+            nlength=len(self.negative_set)
+            if plength * 3 >= nlength:
+                self.length = nlength / 3 + nlength
+            else:
+                self.length=plength * 4
 
     def __len__(self):
-        return len(self.dataset_file)
+        return self.length
 
     def __getitem__(self, item):
 
-        img,pts,category,iou=self.dataset_file[item] # image, pts, category, iou
+        sample=None
+        rand=random.randint(0,1)
+
+        if self.positive_index == len(self.positive_set):
+            self.positive_index = 0
+        if self.negative_index == len(self.negative_set):
+            self.negative_index = 0
+
+        if self.positive_counter==self.positive_num and self.negative_counter==self.negative_num:
+            self.positive_counter=0
+            self.negative_counter=0
+
+        if rand==0:
+            if self.positive_counter<self.positive_num:
+                sample=self.positive_set[self.positive_index]
+                self.positive_counter+=1
+            else:
+                sample = self.negative_set[self.negative_index]
+                self.negative_counter += 1
+        else:
+            if self.negative_counter<self.negative_num:
+                sample=self.negative_set[self.negative_index]
+                self.negative_counter+=1
+            else:
+                sample = self.positive_set[self.positive_index]
+                self.positive_counter += 1
+
+        img,pts,category,iou=sample[0],sample[1],sample[2],sample[3] # image, pts, category, iou
         if img in self.catcher:
             image=self.catcher[img][:,pts[0]:pts[0]+pts[2],pts[1]:pts[1]+pts[3]]
         else:
             image=cv2.imread(img)
+            image=image/255
             self.catcher[img]=image.copy()
             image = self.catcher[img][:, pts[0]:pts[0] + pts[2], pts[1]:pts[1] + pts[3]]
 
@@ -49,19 +115,18 @@ class Data(tdata.Dataset):
 
         target=0
         if iou >=iou_threshold:
+
             target=category
 
         return {"image":image,"target":target}
 
-    def set_train_model(self, model="cnn"):
-        self.model=model
+    def make_dataset(self, data_path=["n01798484","n02089973","n02110341"]):
 
-    def make_dataset(self, data_path=["n01798484","n02089973","n02110341"],save_path="make_datasets"):
+        dt_root_dir="/workspace/dataset/imagenet/raw-data/train"
+        bdx_root_dir="/workspace/dataset/imagenet/raw-data/bounding_boxes"
+        count=0
 
-        dt_root_dir="/disk1/dataset/imagenet/raw-data/train"
-        bdx_root_dir="/disk1/dataset/imagenet/raw-data/bounding_boxes"
-
-        for i in xrange(len(data_path)):
+        for i in range(len(data_path)):
             bds = os.listdir(bdx_root_dir+"/"+data_path[i])
             for bd in bds:
                 img=dt_root_dir+"/"+data_path[i]+"/"+bd.split(".")[0]+".JPEG"
@@ -73,27 +138,40 @@ class Data(tdata.Dataset):
                     print("no valid boundingbox, image: ",img)
                     continue
 
-                ox0=int(bndbox[0].getElementsByTagName("xmin").childNodes[0].data)
-                oy0=int(bndbox[0].getElementsByTagName("ymin").childNodes[0].data)
-                ox1=int(bndbox[0].getElementsByTagName("xmax").childNodes[0].data)
-                oy1=int(bndbox[0].getElementsByTagName("ymax").childNodes[0].data)
+                ox0=int(bndbox[0].getElementsByTagName("xmin")[0].childNodes[0].data)
+                oy0=int(bndbox[0].getElementsByTagName("ymin")[0].childNodes[0].data)
+                ox1=int(bndbox[0].getElementsByTagName("xmax")[0].childNodes[0].data)
+                oy1=int(bndbox[0].getElementsByTagName("ymax")[0].childNodes[0].data)
 
                 image=cv2.imread(img)
-                img_lb, regions = ss.selective_search(image, scale=1000, sigma=0.8, min_size=50)
+                img_lb, regions = ss.selective_search(image, scale=200, sigma=0.8, min_size=50)
 
-                one = (img, (ox0,oy0,ox1-ox0,oy1-oy1), i + 1, 1.0)
+                one = (img, (ox0,oy0,ox1-ox0,oy1-oy0), i + 1, 1.0)
                 self.dataset_file.append(one)
+                count=count+1
+
+                rect_collectons=set()
                 for reg in regions:
-                    if reg["size"]<=50:
+                    if reg["size"]<=50 or reg["rect"] in rect_collectons:
                         continue
-                    iou=self.IOU((ox0,oy0,ox1-ox0,oy1-oy1),reg["rect"])
+                    rect_collectons.add(reg["rect"])
+                    print("---", count, "---one: ", one)
+                    iou=self.IOU((ox0,oy0,ox1-ox0,oy1-oy0),reg["rect"])
                     one=(img,reg["rect"],i+1,iou) # 0 is background
                     self.dataset_file.append(one)
         self.dataset_file=sorted(self.dataset_file,key=lambda dt:dt[3])
-        pickle.dump(self.dataset_file,save_path)
+        self.save_dataset()
 
     def save_dataset(self,path="dataset_file.pkl"):
-        pickle.dump(self.dataset_file,path)
+        print("samples num:%v",len(self.dataset_file))
+        with open(path,"wb") as f:
+            pickle.dump(self.dataset_file,f)
+
+    def load_dataset(self,path="dataset_file.pkl"):
+        print("dataset path: ",path)
+        with open(path,"r") as f:
+            self.dataset_file=pickle.load(f)
+        print("dataset type: ",type(self.dataset_file),", dataset size: ",len(self.dataset_file))
 
     def IOU(self,rect1,rect2):
         # iou=0.5 训练alexnet
@@ -125,3 +203,8 @@ class Data(tdata.Dataset):
 
         iou=area/(r1area+r2area-area)
         return iou
+
+if __name__=="__main__":
+
+    dt=Data()
+    dt.make_dataset()
