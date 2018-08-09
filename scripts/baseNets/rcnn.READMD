@@ -10,5 +10,5 @@ testing:
 1. ss
 2. NMS
 3. image augument
-4. cnn->SVM
-5. ridge regression
+4. cnn->SVM+ridge regression
+5. the bbox that selected by svm were passed to ridge regression(canny)

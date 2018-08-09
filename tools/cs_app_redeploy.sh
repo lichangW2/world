@@ -12,13 +12,16 @@ function deployApp(){
        if [ -d $root_path/$app ]
           then
             info=$(curl -v  -H "Authorization:QiniuStub uid=1381102897&ut=1" http://10.200.20.54:8001/v1/ufops/$app/info/brief)
-            image=$(python -c "print($info['releases'][0]['image']).split('/')[1]")
+            image=$(python -c "print($info['releases'][len($info['releases'])-2]['image']).split('/')[1]")
+            verstr=$(python -c "print($info['releases'][0]['verstr']).split('/')[1]")
             if [ $? -eq 0 ];then
                   echo "start deploy app: "$app" with image: " $image
                   $cmd deploy $app -i $image  -d "cs machine migration"
                   if [ $? -ne 0 ];then
                         echo "deploy failed app " $app >> $failed
                   fi
+                  #curl -v  -H "Authorization:QiniuStub uid=1381102897&ut=1" http://10.200.20.54:8001/v1/ufops/$app/deployments -d \
+                  #'{"verstr":\"$verstr\","region":"cs","expect":1}'
             else
                echo "deploy failed app " $app >> $failed
             fi

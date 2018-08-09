@@ -17,14 +17,17 @@ import xml.dom.minidom as xml_parse
 
 class Data(tdata.Dataset):
 
-    def __init__(self,data_path=None,model="cnn"):
+    def __init__(self,transfomer,data_path=None,model="cnn"):
 
         self.target=[0,1,2,3] # 0 is background, we just use three class of images
         self.catcher={}
+        self.ground_truth_pts={}
 
+        self.transfomer=transfomer
         self.dataset_file=[]
         if data_path:
-            with open(data_path,"r") as f:
+            with open(data_path,"rb") as f:
+
                 self.dataset_file = pickle.load(f)
 
         self.cnn_iou=0.5
@@ -41,22 +44,26 @@ class Data(tdata.Dataset):
         self.negative_counter=0
         self.positive_index=0
         self.negative_index=0
-
-        threshold_iou=0
+        self.threshold_iou=0
 
         if self.model=="cnn":
-            threshold_iou=self.cnn_iou
+            self.threshold_iou=self.cnn_iou
         elif self.model=="svm":
-            threshold_iou=self.svm_iou
+            self.threshold_iou=self.svm_iou
         else:
-            threshold_iou=self.regression_iou
+            self.threshold_iou=self.regression_iou
 
         if len(self.dataset_file)!=0:
             for sample in self.dataset_file:
-                if sample["iou"] < threshold_iou:
+                if sample[1][2]<5 or sample[1][3]<5:
+                    continue
+                if sample[3] < self.threshold_iou:
                     self.negative_set.append(sample)
                 else:
                     self.positive_set.append(sample)
+
+            random.shuffle(self.negative_set)
+            random.shuffle(self.positive_set)
 
             plength=len(self.positive_set)
             nlength=len(self.negative_set)
@@ -64,6 +71,7 @@ class Data(tdata.Dataset):
                 self.length = nlength / 3 + nlength
             else:
                 self.length=plength * 4
+        print("negative set: {}, positive set: {}".format(len(self.negative_set),len(self.positive_set)))
 
     def __len__(self):
         return self.length
@@ -86,36 +94,29 @@ class Data(tdata.Dataset):
             if self.positive_counter<self.positive_num:
                 sample=self.positive_set[self.positive_index]
                 self.positive_counter+=1
+                self.positive_index+=1
             else:
                 sample = self.negative_set[self.negative_index]
                 self.negative_counter += 1
+                self.negative_index += 1
         else:
             if self.negative_counter<self.negative_num:
                 sample=self.negative_set[self.negative_index]
-                self.negative_counter+=1
+                self.negative_counter += 1
+                self.negative_index += 1
             else:
                 sample = self.positive_set[self.positive_index]
                 self.positive_counter += 1
+                self.positive_index += 1
 
-        img,pts,category,iou=sample[0],sample[1],sample[2],sample[3] # image, pts, category, iou
-        if img in self.catcher:
-            image=self.catcher[img][:,pts[0]:pts[0]+pts[2],pts[1]:pts[1]+pts[3]]
-        else:
-            image=cv2.imread(img)
-            image=image/255
-            self.catcher[img]=image.copy()
-            image = self.catcher[img][:, pts[0]:pts[0] + pts[2], pts[1]:pts[1] + pts[3]]
+        img,pts,category,iou=sample[0],sample[1],sample[2],sample[3] # image, pts(x,y,w,h), category, iou
 
-        if len(self.catcher)>=30:
-            self.catcher={}
-
-        iou_threshold=self.cnn_iou
-        if self.model!="cnn":
-            iou_threshold=self.svm_iou
+        image=cv2.imread(img) #image(H,W,C)
+        image = image[pts[1]:pts[1] + pts[3],pts[0]:pts[0] + pts[2],:]
+        image=self.transfomer(image)
 
         target=0
-        if iou >=iou_threshold:
-
+        if iou >=self.threshold_iou:
             target=category
 
         return {"image":image,"target":target}
@@ -172,6 +173,13 @@ class Data(tdata.Dataset):
         with open(path,"r") as f:
             self.dataset_file=pickle.load(f)
         print("dataset type: ",type(self.dataset_file),", dataset size: ",len(self.dataset_file))
+
+    def __ground_truth(self):
+        if self.dataset_file is not None:
+            for sample in self.dataset_file:
+                if sample[3]==1.0 and sample[0] not in self.ground_truth_pts[sample[0]]:
+                    self.ground_truth_pts[sample[0]]=sample[1]
+
 
     def IOU(self,rect1,rect2):
         # iou=0.5 训练alexnet
