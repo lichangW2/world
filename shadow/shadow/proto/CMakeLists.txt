@@ -1,0 +1,7 @@
+if (Protobuf_FOUND)
+  file(GLOB proto_files "*.proto")
+  GenProtobuf(proto_srcs proto_hdrs ${proto_files})
+  add_library(proto STATIC ${proto_srcs} ${proto_hdrs})
+  install(TARGETS proto DESTINATION ${Shadow_INSTALL_LIB_PREFIX})
+  set(Shadow_PROTO_LIB proto PARENT_SCOPE)
+endif ()

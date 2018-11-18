@@ -7,11 +7,14 @@ import torchvision.transforms as transforms
 import torch.utils.data as udata
 
 import cv2
+import numpy as np
 from sklearn import svm
 from sklearn.externals import joblib
 from sklearn import linear_model
+import selectivesearch as ss
+import json
 
-import  rcnn_data
+import rcnn_data
 
 
 transf = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,0.5,0.5),(0.5,0.5,0.5)),transforms.ToPILImage(),transforms.Resize((227,227)),transforms.ToTensor()])
@@ -26,7 +29,7 @@ class CRNN(nn.Module):
 
         self.Tclassifier=False
 
-        self.svm_classifier=svm.SVC(kernel="linear")
+        self.svm_classifier=svm.SVC(kernel="linear",probability=True)
         self.ridge_regression=linear_model.Ridge(alpha=num_classes) ## input: (4096 features),output:(scale_x,scale_y,offset_x,offset_y)
         self.features=alexnet.features
         self.flatten=nn.Sequential(
@@ -38,9 +41,9 @@ class CRNN(nn.Module):
         )
         self.nn_classifier= nn.Linear(4096, num_classes)
 
-    def forward(self,x):
+    def forward(self,img):
 
-        x=self.features(x)
+        x=self.features(img)
         x=x.view(-1,256*6*6)
         x=self.flatten(x)
 
@@ -50,7 +53,9 @@ class CRNN(nn.Module):
         if not self.training:
             ## if not in training model, add svm at the end of flatten
             x=x.tolist()
-            x=self.svm_classifier.predict(x)
+            clip=self.ridge_regression.predict(x)
+            clas=self.svm_classifier.predict_proba(x)
+            x={"clip":clip,"class":clas}
         else:
             x= self.nn_classifier(x)
 
@@ -131,33 +136,80 @@ def TrainSVMandRidgeRegression():
     net = CRNN(num_classes=4)
     net.to(device)
     net.Tclassifier=True
-    net.eval()
     net.load(model="classifier")
 
-    train_set = rcnn_data.Data(data_path="dataset_file_390459_samples.pkl", model="svm", transfomer=transf)
-    dataloader = udata.DataLoader(train_set,batch_size=128,shuffle=False)
+    train_svm_set = rcnn_data.Data(data_path="dataset_file_390459_samples.pkl", model="svm", transfomer=transf)
+    dataloader = udata.DataLoader(train_svm_set,batch_size=128,shuffle=False)
 
     features=[]
     svm_targets=[]
-    ridge_target=[]
     for i,data in enumerate(dataloader,0):
-        inputs, labels = data["image"], data["target"],data["groundtruth"]
+        inputs, labels, _ = data["image"], data["target"],data["groundtruth"]
         inputs, labels=inputs.to(device),labels.to(device)
         outputs=net(inputs)
         features.extend(outputs.tolist())
         svm_targets.extend(labels.tolist())
 
     net.svm_classifier.fit(features, svm_targets)
-    net.ridge_regression.fit()
+
+    train_svm_set = rcnn_data.Data(data_path="dataset_file_390459_samples.pkl", model="ridge", transfomer=transf)
+    dataloader = udata.DataLoader(train_svm_set, batch_size=128, shuffle=False)
+    features=[]
+    ridge_target=[]
+    for i,data in enumerate(dataloader,0):
+        inputs, pts, groundtruth = data["image"], data["pts"],data["groundtruth"]
+        inputs, labels=inputs.to(device),labels.to(device)
+        outputs=net(inputs)
+        features.extend(outputs.tolist())
+        ridge_target.extend((pts[0]-groundtruth[0],pts[1]-groundtruth[1],pts[2]/groundtruth[2],pts[3]/groundtruth[3]))
+
+    print("ridge regression sample num:", len(ridge_target))
+    net.ridge_regression.fit(features,ridge_target)
+    net.saver(model="classifier")
 
 
-def Inference():
-    pass
+def Inference(image):
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    objclass=4
+    net = CRNN(num_classes=objclass)
+    net.to(device)
+    net.load(model="all")
+    net.eval()
+
+    _, regions = rcnn_data.Data.rect_select(image)
+
+    clips=[]
+    classes = []
+    ptss= []
+    for reg in regions:
+        pts=reg["rect"]
+        ptss.append(pts)
+        image=transf(image[pts[1]:pts[1] + pts[3],pts[0]:pts[0] + pts[2],:])
+        output=net(image)
+        clips.append(output["clip"])
+        classes.append(output["class"])
+
+    stclass=np.argsort(classes)
+    class_rects=[]
+    for i in xrange(len(classes)):
+        stclass[i].reverse()
+        ret_cl=rcnn_data.Data.nms(ptss[stclass[i]],clips[stclass[i]])
+        class_rects.append(ret_cl)
+        print(">>>>>>>>>>>>>>>>>>>>>>>> class: ",i, "result pts:",ret_cl)
+
+    result_file=open("pts_result.file")
+    json.dump(result_file,class_rects)
+    result_file.close()
+    ##canny检测这一步不做，直接bridge regression应用
+    #每一个图片的所有候选框n送入svm，得到n*4个打分，每列为一个类别对所有框的打分，对非背景的3列做NMS
+    #最后设定一个剔除阈值来剔除所有不合格的框，这样也会把图片中不可能存在的那类物体的框全部剔除从而只留下
+    #最可能存在的类别中的最可能的框
+
 
 
 if __name__=="__main__":
-
-    TrainingCnn()
+    TrainSVMandRidgeRegression()
 
 
 

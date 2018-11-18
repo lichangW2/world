@@ -1,0 +1,26 @@
+os: linux
+dist: trusty
+sudo: required
+language: cpp
+compiler: gcc
+
+env:
+  matrix:
+    - BUILD=linux-cpu
+    - BUILD=linux-cuda
+    - BUILD=linux-cuda-cudnn
+
+matrix:
+  include:
+    - os: osx
+      compiler: clang
+      env: BUILD=osx
+
+before_install:
+  - source scripts/travis/setup.sh
+
+install:
+  - ./scripts/travis/install.sh
+
+script:
+  - ./scripts/travis/build.sh

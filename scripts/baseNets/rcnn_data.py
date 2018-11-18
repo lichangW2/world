@@ -27,8 +27,8 @@ class Data(tdata.Dataset):
         self.dataset_file=[]
         if data_path:
             with open(data_path,"rb") as f:
-
                 self.dataset_file = pickle.load(f)
+        self.__ground_truth()
 
         self.cnn_iou=0.5
         self.svm_iou=0.3
@@ -71,12 +71,24 @@ class Data(tdata.Dataset):
                 self.length = nlength / 3 + nlength
             else:
                 self.length=plength * 4
+
+            if self.model == "ridge":
+                self.length=len(self.positive_set)
         print("negative set: {}, positive set: {}".format(len(self.negative_set),len(self.positive_set)))
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, item):
+
+        if self.model =="ridge":
+
+            img, pts, _, _ = self.positive_set[item][0],self.positive_set[item][1], self.positive_set[item][2], self.positive_set[item][3]
+            image = cv2.imread(img)  # image(H,W,C)
+            image = image[pts[1]:pts[1] + pts[3], pts[0]:pts[0] + pts[2], :]
+            image = self.transfomer(image)
+
+            return {"image":image,"pts":pts,"ground_truth":self.ground_truth_pts[img]}
 
         sample=None
         rand=random.randint(0,1)
@@ -145,7 +157,7 @@ class Data(tdata.Dataset):
                 oy1=int(bndbox[0].getElementsByTagName("ymax")[0].childNodes[0].data)
 
                 image=cv2.imread(img)
-                img_lb, regions = ss.selective_search(image, scale=200, sigma=0.8, min_size=50)
+                _, regions = ss.selective_search(image, scale=200, sigma=0.8, min_size=50)
 
                 one = (img, (ox0,oy0,ox1-ox0,oy1-oy0), i + 1, 1.0)
                 self.dataset_file.append(one)
@@ -162,6 +174,14 @@ class Data(tdata.Dataset):
                     self.dataset_file.append(one)
         self.dataset_file=sorted(self.dataset_file,key=lambda dt:dt[3])
         self.save_dataset()
+    def rect_select(self,image):
+        _, regions = ss.selective_search(image, scale=200, sigma=0.8, min_size=50)
+        rect_collectons = set()
+        for reg in regions:
+            if reg["size"] <= 50 or reg["rect"] in rect_collectons:
+                continue
+            rect_collectons.add(reg["rect"])
+        return rect_collectons
 
     def save_dataset(self,path="dataset_file.pkl"):
         print("samples num:%v",len(self.dataset_file))
@@ -177,9 +197,8 @@ class Data(tdata.Dataset):
     def __ground_truth(self):
         if self.dataset_file is not None:
             for sample in self.dataset_file:
-                if sample[3]==1.0 and sample[0] not in self.ground_truth_pts[sample[0]]:
+                if sample[3]==1.0 and sample[0] not in self.ground_truth_pts:
                     self.ground_truth_pts[sample[0]]=sample[1]
-
 
     def IOU(self,rect1,rect2):
         # iou=0.5 训练alexnet
@@ -212,7 +231,18 @@ class Data(tdata.Dataset):
         iou=area/(r1area+r2area-area)
         return iou
 
-if __name__=="__main__":
+    def nms(self,rects,clips,score_up_threshold=0.7,score_down_threshold=0.35):
+        max_rect=rects[0]
 
-    dt=Data()
-    dt.make_dataset()
+        ret_cll=set()
+        for i in xrange(len(rects)-1):
+            index=i+1
+            iou=self.IOU(max_rect,rects[index])
+            if iou>score_up_threshold or iou < score_down_threshold:
+                continue
+            sc=rects[index][0]-clips[index][0],rects[index][1]-clips[index][1],rects[index][2]/clips[index][2],rects[index][3]/clips[index][3]
+            ret_cll.add(rects[index])
+
+        max_rect[0],max_rect[0],max_rect[2],max_rect[3]=max_rect[0]-clips[0][0],max_rect[1]-clips[0][1],max_rect[2]/clips[0][2],max_rect[3]/clips[0][3]
+        ret_cll.add(max_rect)
+        return ret_cll
