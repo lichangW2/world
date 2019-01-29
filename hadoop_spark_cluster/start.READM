@@ -1,0 +1,12 @@
+1. 分别修改/etc/hosts 添加 master, slave1, slave2 地址
+2. 分别修改/opt/zookeeper/data/myid, 三个id各不相同
+   2.1 分别修改/opt/zookeeper/zookeeper-3.4.10/conf/zoo.cfg,
+       使hostname.xx=hostname2:2888:3888中xx对应myid,当前机器中的hostname2改为0.0.0.0
+3. 分别生成ssh key免登录, hadoop通过ssh访问
+   3.1 分别执行rm ~/.ssh/* && ssh-keygen -t rsa
+   3.2 在master上执行 cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
+   3.3 分别将slave1和slave2上的id_rsa.pub 追加到master上的authorized_keys,
+       将authorized_keys分别copy到slave1和slave2的~/.ssh下
+4. 分别删除并重建dfs的meta和数据目录
+   4.1 分别执行：rm -rf root/hadoop && mkdir -p /root/hadoop/
+   4.2 在master上执行一次：hdfs namenode -format 初始化 
