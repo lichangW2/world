@@ -2,6 +2,7 @@
 2. 分别修改/opt/zookeeper/data/myid, 三个id各不相同
    2.1 分别修改/opt/zookeeper/zookeeper-3.4.10/conf/zoo.cfg,
        使hostname.xx=hostname2:2888:3888中xx对应myid,当前机器中的hostname2改为0.0.0.0
+   2.2 rm -rf /opt/zookeeper/data/* && rm /opt/zookeeper/dataLog/*
 3. 分别生成ssh key免登录, hadoop通过ssh访问
    3.1 分别执行rm ~/.ssh/* && ssh-keygen -t rsa
    3.2 在master上执行 cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
@@ -9,4 +10,10 @@
        将authorized_keys分别copy到slave1和slave2的~/.ssh下
 4. 分别删除并重建dfs的meta和数据目录
    4.1 分别执行：rm -rf root/hadoop && mkdir -p /root/hadoop/
-   4.2 在master上执行一次：hdfs namenode -format 初始化 
+   4.2 在master上执行一次：hdfs namenode -format 初始化
+5. 修改spark的start和stop文件，修正路径：export SPARK_HOME="/opt/spark/spark-2.3.0-bin-hadoop2.7"
+6. kafka
+   6.1  修改/opt/kafka/kafka_2.11-2.1.0/config/server.properties,三个broker.id必须不同
+   6.2 rm -rf /opt/kafka/logs/*
+   6.3  pip install kafka-python  --trusted-host http://mirrors.aliyun.com/pypi/simple/
+7. 

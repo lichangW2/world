@@ -1,0 +1,6 @@
+1.hadoop修正
+<property>
+     <name>hadoop.tmp.dir</name>
+     <value>/root/hadoop/tmp</value>
+     <description>namenode data directory</description>
+</property>

@@ -5,7 +5,7 @@ RUN apt-get update -y --allow-unauthenticated && \
     python-setuptools python-pip libpython2.7-dev python-software-properties openssh-server git wget && \
     add-apt-repository ppa:webupd8team/java 
 
-RUN pip install -q -i  kafka
+RUN pip install -q --trusted-host http://mirrors.aliyun.com/pypi/simple/  kafka-python
 
 # environments settings
 ENV SOURCE /cluster/source
