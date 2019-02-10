@@ -38,12 +38,13 @@ def KFProducer(proc_id,topic,server):
         print(traceback.format_exc())
 
 
-def KFConsumer(topic,group, server):
+def KFConsumer(worker,topic, server):
     sys.stdout.flush()
-    print("start consumer... ")
-    consumer= KafkaConsumer(topic,group_id = group, bootstrap_servers=server,value_deserializer=lambda v: json.loads(v) )
+    print("start consumer... ",str(worker)+"test_gp")
+    consumer= KafkaConsumer(topic,group_id = str(worker)+"test_gp", bootstrap_servers=server,value_deserializer=lambda v: json.loads(v) )
     for msg in consumer:
-        print("receive one message: {}\n".format(msg))
+        time.sleep(1)
+        print("worker:{}, receive one message: {}\n".format(worker,msg))
 
 
 if __name__=="__main__":
@@ -68,7 +69,13 @@ if __name__=="__main__":
                 pool.close()
                 pool.join()
             elif opt_name in ("-c","--consumer"):
-                KFConsumer(topic,"testgroup-id",server)
+                pool = mp.Pool(processes=2)
+                for id in xrange(2):
+                    ret = pool.apply_async(KFConsumer, args=(id, topic,server,))
+
+                print("2 consumers is running...")
+                pool.close()
+                pool.join()
             else:
                 print(HELP)
             sys.exit(0)
