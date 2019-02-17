@@ -12,6 +12,8 @@
    4.1 分别执行：rm -rf root/hadoop && mkdir -p /root/hadoop/
    4.2 在master上执行一次：hdfs namenode -format 初始化
 5. 修改spark的start和stop文件，修正路径：export SPARK_HOME="/opt/spark/spark-2.3.0-bin-hadoop2.7"
+   5.1 分别执行： export SPARK_HOME=/opt/spark/spark-2.3.0-bin-hadoop2.7/
+       export PYTHONPATH=/opt/spark/spark-2.3.0-bin-hadoop2.7/python:/opt/spark/spark-2.3.0-bin-hadoop2.7/python/lib/py4j-0.10.6-src.zip
 6. kafka
    6.1  修改/opt/kafka/kafka_2.11-2.1.0/config/server.properties,三个broker.id必须不同
    6.2 rm -rf /opt/kafka/logs/*
