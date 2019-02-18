@@ -3,16 +3,16 @@ import sys
 from pyspark import SparkContext
 
 
-os.environ['SPARK_HOME'] = "/opt/spark/spark-2.3.0-bin-hadoop2.7"
-os.environ['PYSPARK_SUBMIT_ARGS'] = "--master yarn pyspark-shell"
-sys.path.append(os.path.join(os.environ['SPARK_HOME'], "python"))
-sys.path.append("/opt/spark/spark-2.3.0-bin-hadoop2.7/python/lib/py4j-0.10.6-src.zip")
+#os.environ['SPARK_HOME'] = "/opt/spark/spark-2.3.0-bin-hadoop2.7"
+#os.environ['PYSPARK_SUBMIT_ARGS'] = "--master yarn pyspark-shell"
+#sys.path.append(os.path.join(os.environ['SPARK_HOME'], "python"))
+#sys.path.append("/opt/spark/spark-2.3.0-bin-hadoop2.7/python/lib/py4j-0.10.6-src.zip")
 
 def wordCount():
     #spark://master:7077
     sc=SparkContext("local","wordcount")
-    #dir="hdfs://localhost:11230/"
-    dir="file:///workspace/"
+    dir="hdfs://localhost:11230/spark/test/"
+    #dir="file:///workspace/"
     path=dir+"hello.txt"
 
     textRDD=sc.textFile(path)
