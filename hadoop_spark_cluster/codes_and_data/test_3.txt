@@ -1,0 +1,7 @@
+[3243433434]ERROR:xxfdfsd,MySQL_sfdsdfxx
+[3243433434]INFO:xxfdfsd,MySQL_sfdsdfxx
+[3243433434]WARNING:xxfdfsd,MySQL_sfdsdfxx
+[3243433434]ERROR:xxfdfsd,MySQL_sfdsdfxx
+[3243433434]INFO:xxfdfsd,xxdf_sfdsdfxx
+[3243433434]ERROR:xxfdfsd,SQL_sfdsdfxx
+[3243433434]ERROR:xxfdfsd,MySQL_sfdsdfxx

@@ -1,0 +1,197 @@
+#include <caffe/caffe.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <algorithm>
+#include <iosfwd>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+#include <iostream>
+#include <ctime>
+
+#include <stdio.h>  
+#include <sys/time.h>    
+
+using namespace caffe;  // NOLINT(build/namespaces)
+using std::string;
+
+
+class Classifier {
+ public:
+  Classifier();
+
+  std::vector<float> Classify(const cv::Mat& img);
+ private:
+
+  void Init_Img(const cv::Mat& img,
+                  std::vector<cv::Mat>* input_channels);
+
+ private:
+  shared_ptr<Net<float> > net_;
+  cv::Size input_geometry_;
+  int num_channels_;
+};
+
+Classifier::Classifier(){
+  Caffe::set_mode(Caffe::GPU);
+  string model_file   = "/workspace/serving/models/online-model/used/fine_deploy.prototxt";
+  string trained_file = "/workspace/serving/models/online-model/used/fine_weight.caffemodel";
+//  string model_file   = "/workspace/serving/models/online-model/used/coarse_deploy.prototxt";
+//  string trained_file = "/workspace/serving/models/online-model/used/coarse_weight.caffemodel";
+
+
+  net_.reset(new Net<float>(model_file, TEST));
+  net_->CopyTrainedLayersFrom(trained_file);
+
+ 
+  Blob<float>* input_layer = net_->input_blobs()[0];
+  num_channels_ = input_layer->channels();
+  CHECK(num_channels_ == 3 )
+    << "Input layer should have 3 channels."; 
+  input_geometry_ = cv::Size(input_layer->width(), input_layer->height());
+  Blob<float>* output_layer = net_->output_blobs()[0];
+}
+
+std::vector<float> Classifier::Classify(const cv::Mat& img) {
+  clock_t start_time1,end_time1,start_time2,end_time2, start_time3, end_time3;
+  start_time1 = clock();
+
+  Blob<float>* input_layer = net_->input_blobs()[0];
+  input_layer->Reshape(1, num_channels_,
+                       input_geometry_.height, input_geometry_.width);
+  net_->Reshape();
+
+  std::vector<cv::Mat> input_channels;
+  Init_Img(img, &input_channels);
+
+  end_time1 = clock();
+  double seconds1 = (double)(end_time1-start_time1)/CLOCKS_PER_SEC;
+
+  net_->Forward();
+  end_time2 = clock();
+  double seconds2 = (double)(end_time2-end_time1)/CLOCKS_PER_SEC;
+
+  Blob<float>* output_layer = net_->output_blobs()[0];
+
+  clock_t end_time3_1 = clock();
+  double seconds3_1 = (double)(end_time3_1-end_time2)/CLOCKS_PER_SEC;
+  const float* begin = output_layer->cpu_data();
+
+  clock_t end_time3_2 = clock();
+  double seconds3_2 = (double)(end_time3_2-end_time3_1)/CLOCKS_PER_SEC;
+
+  const float* end = begin + output_layer->channels();
+
+  end_time3 = clock();
+  double seconds3 = (double)(end_time3-end_time3_2)/CLOCKS_PER_SEC;
+  std::cout<<"--------------->preprocess time="<<seconds1<<"s"<<std::endl;
+  std::cout<<"--------------->forward time="<<seconds2<<"s"<<std::endl;
+  std::cout<<"--------------->aftprocess time="<< seconds3_1<<"  "<< seconds3_2 <<"  " << seconds3<<"s"<<std::endl;
+  return std::vector<float>(begin, end);
+}
+
+void Classifier::Init_Img(const cv::Mat& img,
+                            std::vector<cv::Mat>* input_channels) {
+  Blob<float>* input_layer = net_->input_blobs()[0];
+
+  int width = input_layer->width();
+  int height = input_layer->height();
+  float* input_data = input_layer->mutable_cpu_data();
+  for (int i = 0; i < input_layer->channels(); ++i) {
+    cv::Mat channel(height, width, CV_32FC1, input_data);
+    input_channels->push_back(channel);
+    input_data += width * height;
+  }
+
+  cv::Mat sample;
+  if (img.channels() == 4 )
+    cv::cvtColor(img, sample, cv::COLOR_BGRA2BGR);
+  else if (img.channels() == 1 )
+    cv::cvtColor(img, sample, cv::COLOR_GRAY2BGR);
+  else
+    sample = img;
+
+  cv::Mat sample_resized;
+  if (sample.size() != input_geometry_)
+    cv::resize(sample, sample_resized, input_geometry_);
+  else
+    sample_resized = sample;
+
+  cv::Mat sample_float;
+    sample_resized.convertTo(sample_float, CV_32FC3);
+
+  cv::split(sample_float, *input_channels);
+
+  input_data = input_layer->mutable_cpu_data();
+  //for (int i=0; i < 256; ++i) {
+  //   std::cout << input_data[i] ;
+  //}
+  //std::cout <<std::endl;
+}
+
+int main(int argc, char** argv) {
+  clock_t start_time1,end_time1,start_time2,end_time2;
+  ::google::InitGoogleLogging(argv[0]);
+
+  start_time1 = clock();
+  Classifier classifier;
+  end_time1 = clock();
+  double seconds1 = (double)(end_time1-start_time1)/CLOCKS_PER_SEC;
+  std::cout<<"init time="<<seconds1<<"s"<<std::endl;
+  
+  string file = "/workspace/serving/models/image/sexy2.jpg";
+  cv::Mat img = cv::imread(file, -1);
+  start_time2 = clock();
+  vector<float> result = classifier.Classify(img);
+  end_time2 = clock();
+  double seconds2 = (double)(end_time2-start_time2)/CLOCKS_PER_SEC;
+  std::cout<<"--------------->classify time="<<seconds2<<"s"<<std::endl;
+
+  for (int i = 0; i < result.size(); ++i) {
+      if (result[i] >=0.0000000000000001)
+        std::cout << result[i] << std::endl;    
+  }
+
+  string file2 = "/workspace/serving/models/image/bomb.jpg";
+  cv::Mat img2 = cv::imread(file2, -1);
+  start_time2 = clock();
+  vector<float> result2 = classifier.Classify(img2);
+  end_time2 = clock();
+  seconds2 = (double)(end_time2-start_time2)/CLOCKS_PER_SEC;
+  std::cout<<"--------------->classify time="<<seconds2<<"s"<<std::endl;
+
+  for (int i = 0; i < result2.size(); ++i) {
+    if (result2[i] >0.000000000000000001)
+      std::cout << i << "  "<< result2[i] << std::endl;
+  }
+
+
+  string file3 = "/workspace/serving/models/image/xi_chuan.jpg";
+  cv::Mat img3 = cv::imread(file3, -1);
+  start_time2 = clock();
+  vector<float> result3 = classifier.Classify(img3);
+  end_time2 = clock();
+  seconds2 = (double)(end_time2-start_time2)/CLOCKS_PER_SEC;
+  std::cout<<"--------------->classify time="<<seconds2<<"s"<<std::endl;
+
+  for (int i = 0; i < result3.size(); ++i) {
+    if (result3[i] >0.000000000000000001)
+      std::cout << i << "  "<< result3[i] << std::endl;
+  }
+
+  string file4 = "/workspace/serving/models/image/illegal_flag.jpg";
+  cv::Mat img4 = cv::imread(file4, -1);
+  clock_t start_time4 = clock();
+  vector<float> result4 = classifier.Classify(img4);
+  clock_t end_time4 = clock();
+  double seconds4 = (double)(end_time4-start_time4)/CLOCKS_PER_SEC;
+  std::cout<<"--------------->classify time="<<seconds4<<"s"<<std::endl;
+
+  for (int i = 0; i < result4.size(); ++i) {
+    if (result4[i] >0.000000000000000001)
+      std::cout << i << "  "<< result4[i] << std::endl;
+  }
+
+}

@@ -1,6 +1,7 @@
 import os
 import sys
 from pyspark import SparkContext
+from pyspark import SparkConf
 
 
 #os.environ['SPARK_HOME'] = "/opt/spark/spark-2.3.0-bin-hadoop2.7"
@@ -9,9 +10,15 @@ from pyspark import SparkContext
 #sys.path.append("/opt/spark/spark-2.3.0-bin-hadoop2.7/python/lib/py4j-0.10.6-src.zip")
 
 def wordCount():
+    conf=SparkConf().setMaster("local") \
+             .setAppName("wordcount") \
+             .set("spark.executor.memoryOverhead","512m") \
+             .set("spark.driver.memoryOverhead","512m") \
+             .set("spark.driver.memory","512m") \
+             .set("spark.executor.memory","512")
     #spark://master:7077
-    sc=SparkContext("local","wordcount")
-    dir="hdfs://localhost:11230/spark/test/"
+    sc=SparkContext(conf=conf)
+    dir="hdfs://master:11230/spark/test/"
     #dir="file:///workspace/"
     path=dir+"hello.txt"
 

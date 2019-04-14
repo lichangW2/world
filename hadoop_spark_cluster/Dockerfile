@@ -2,7 +2,8 @@ FROM reg.qiniu.com/avaprd/argus-base-serving-base:20180719-v113-dev
 
 RUN apt-get update -y --allow-unauthenticated && \
     apt-get -y --allow-unauthenticated install software-properties-common python-software-properties \
-    python-setuptools python-pip libpython2.7-dev python-software-properties openssh-server git wget && \
+    python-setuptools python-pip libpython2.7-dev python-software-properties
+openssh-server git wget  mysql-server && \
     add-apt-repository ppa:webupd8team/java 
 
 RUN pip install -q -i http://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com kafka-python pyspark
