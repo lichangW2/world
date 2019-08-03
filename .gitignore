@@ -10,7 +10,7 @@
 
 **cmake-build-debug/
 **.idea/
-**..gradle/
+**.gradle/
 **bin/
 **build/
 **CMakeFiles/
