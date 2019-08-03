@@ -14,8 +14,8 @@ class Env final{
 
 public:
     Env()=delete;
-    Env(std::string model, std::string param, std::string label, float *mean, int input_size);
-    std::string Inference(std::string img,int limit);
+    Env(const char* model, const  char* param,const char* label, float *mean, int input_size);
+    std::string Inference(const char* img, int limit);
     ~Env();
 
 private:

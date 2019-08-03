@@ -18,12 +18,12 @@
 
 using namespace std;
 
-Env::Env(std::string model, std::string param, std::string label, float *mean, int input_size) {
+Env::Env(const char* model, const char* param, const char* label, float *mean, int input_size) {
 
     this->net=new(ncnn::Net);
-    this->net->load_param(param.c_str());
-    this->net->load_model(model.c_str());
-    this->labels=loadLabels(label.c_str());
+    this->net->load_param(param);
+    this->net->load_model(model);
+    this->labels=loadLabels(label);
     this->input_size=input_size;
 
     this->mean[0]=mean[0];
@@ -37,7 +37,7 @@ Env::~Env() {
 }
 
 
-std::string Env::Inference(std::string image,int limit){
+std::string Env::Inference(const char* image,int limit){
     try {
         cv::Mat cvin = cv::imread(image, cv::IMREAD_COLOR);
         if(cvin.empty()||cvin.cols<10||cvin.rows<10){
