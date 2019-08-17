@@ -25,13 +25,21 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
-import androidx.loader.content.CursorLoader;
 
 import android.view.Menu;
 import android.widget.Toast;
 import android.provider.MediaStore;
 import android.database.Cursor;
 import android.Manifest;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URL;
+
+import static java.lang.System.in;
 
 
 public class MainActivity extends AppCompatActivity
@@ -44,6 +52,14 @@ public class MainActivity extends AppCompatActivity
     private static final int GET_PERMISSION = 520;
     private String image_path="";
 
+    private int target_size=227;
+    private float[] mean={104.f, 117.f, 123.f};
+    private String model="ncnn_alexnet.bin";
+    private String param="ncnn_alexnet.param";
+    private String labels="imagenet1000_preprocessed_labels.txt";
+    private netlib net =new netlib();
+    private long net_env=0;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -52,14 +68,15 @@ public class MainActivity extends AppCompatActivity
         setSupportActionBar(toolbar);
         FloatingActionButton fab = findViewById(R.id.fab);
 
-       // final netlib net=new netlib();
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "alnext test ", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-            }
-        });
+
+        try{
+            fab.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View view) {
+                        Snackbar.make(view, "cv classification" , Snackbar.LENGTH_LONG)
+                                .setAction("Action", null).show();
+                    }});
+
         DrawerLayout drawer = findViewById(R.id.drawer_layout);
         NavigationView navigationView = findViewById(R.id.nav_view);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
@@ -70,6 +87,92 @@ public class MainActivity extends AppCompatActivity
         //add by clause
         fm= getSupportFragmentManager();
         navigationView.setCheckedItem(R.id.nav_home);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+
+        //ncnn init
+        //异步加载
+        final Activity act=this;
+        new Thread() {
+            public void run() {
+                // 1.执行耗时操作
+
+                        String model_path=getAssetsCacheFile(act,model);
+                        String param_path=getAssetsCacheFile(act,param);
+                        String label_path=getAssetsCacheFile(act,labels);
+                        Log.d("asserts path", "model path:"+model_path);
+                        Log.d("asserts path", "param path:"+param_path);
+                        Log.d("asserts path", "label path:"+label_path);
+                        net_env=net.initEnv(model_path,param_path,label_path,mean,3,target_size);
+                        //清除缓存
+                        File mofile=new File(model_path);
+                        if(mofile.exists()){
+                            Log.d("remove model data", "model path:"+mofile.delete());
+
+                        }
+
+                        File pafile=new File(param_path);
+                        if(pafile.exists()){
+                            Log.d("remove model data", "param path:"+pafile.delete());
+
+                        }
+
+                        File lbfile=new File(label_path);
+                        if(lbfile.exists()){
+                            Log.d("remove model data", "label path:"+lbfile.delete());
+
+                        }
+                runOnUiThread(new Runnable(){
+                    @Override
+                    public void run() {
+                        // 2.更新UI
+                        Toast.makeText(act, "Load model finished, enjoy!", Toast.LENGTH_LONG).show();
+                    }
+                });
+            }
+        }.start();
+
+    }
+
+    public String getAssetsCacheFile(Activity activity, String fileName) {
+
+        File cacheFile = new File(activity.getCacheDir(), fileName);
+        try {
+            //InputStream inputStream = this.getAssets().open(fileName);
+            InputStream inputStream=activity.getClass().getClassLoader().getResourceAsStream ("assets/"+fileName);
+            try {
+                FileOutputStream outputStream = new FileOutputStream(cacheFile);
+                try {
+                    byte[] buf = new byte[1024];
+                    int total=0;
+                    int len;
+                    while ((len = inputStream.read(buf)) > 0) {
+                        outputStream.write(buf, 0, len);
+                        outputStream.flush();
+                        total+=len;
+                    }
+
+                    Log.d("getAssetsCacheFile", fileName+",total bytes:"+total);
+                } finally {
+                    outputStream.close();
+                }
+            } finally {
+                inputStream.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return cacheFile.getAbsolutePath();
+    }
+
+    private void showAvailableBytes(InputStream in) {
+        try {
+            System.out.println("当前字节输入流中的字节数为:" + in.available());
+            Toast.makeText(this,"当前字节输入流中的字节数为:" + in.available(),  Toast.LENGTH_SHORT).show();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -120,10 +223,17 @@ public class MainActivity extends AppCompatActivity
                 Toast.makeText(this, "亲，木有文件管理器啊-_-!!", Toast.LENGTH_SHORT).show();
             }
         }else if (uri=="infer_image"){
-            if(image_path.isEmpty()){
-                Toast.makeText(this, "Inference running....", Toast.LENGTH_SHORT).show();
+            if (image_path.isEmpty()||net_env==0){
+                Toast.makeText(this, "Invalid image path:"+image_path+"or env:"+net_env, Toast.LENGTH_SHORT).show();
                 return ;
             }
+
+           String result=net.inference(net_env,image_path,3);
+            if (result.isEmpty()){
+                Toast.makeText(this, "Invalid inference result!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            clsfragments.showClassifyResult(result);
         }
 
     }
@@ -143,27 +253,13 @@ public class MainActivity extends AppCompatActivity
         if (requestCode == FILE_SELECT_CODE) {
             Uri uri = data.getData();
             clsfragments.showImageNow(uri);
+            image_path=getRealPath2(uri);
 
-            Toast.makeText(this, "图片路径"+getRealPath2(uri), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "图片路径"+image_path, Toast.LENGTH_SHORT).show();
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    public String getFilePath(Uri uri) {
-        String filePath = null;
-        String[] projection = { MediaStore.Images.Media.DATA };
-
-        CursorLoader loader = new CursorLoader(this, uri, projection, null,
-                null, null);
-        Cursor cursor = loader.loadInBackground();
-
-        if (cursor != null) {
-            cursor.moveToFirst();
-            filePath = cursor.getString(cursor.getColumnIndex(projection[0]));
-            cursor.close();
-        }
-        return filePath;
-    }
     private  String getRealPath2( Uri uri) {
 
         if (ContextCompat.checkSelfPermission(this,
@@ -214,19 +310,6 @@ public class MainActivity extends AppCompatActivity
             }
 
       }
-
-    private  String getRealPath(Uri uri) {
-        String filePath = null;
-        String[] projection = { MediaStore.Images.Media.DATA };
-        Cursor cursor = this.getContentResolver().query(uri, projection,
-                null, null, null);
-        if (cursor != null) {
-            cursor.moveToFirst();
-            filePath = cursor.getString(cursor.getColumnIndex(projection[0]));
-            cursor.close();
-        }
-        return filePath;
-    }
 
 
     @SuppressWarnings("StatementWithEmptyBody")

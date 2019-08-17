@@ -40,7 +40,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_example_alexnet_netlib_initEnv
        jenv->DeleteLocalRef(jparam);
        jenv->ReleaseStringUTFChars(jlabel,clabel);
        jenv->DeleteLocalRef(jlabel);
-
+    LOGI("init finished env_ptr:%d",_infer_env);
     return (jlong)_infer_env;
 }
 

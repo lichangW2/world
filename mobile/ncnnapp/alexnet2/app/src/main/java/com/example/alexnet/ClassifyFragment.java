@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.content.Intent;
 import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 import  android.util.Log;
 import android.app.Activity;
@@ -40,6 +41,7 @@ public class ClassifyFragment extends Fragment {
 
     private OnFragmentInteractionListener mListener;
     private ImageView imgv;
+    private TextView rettext;
 
     public ClassifyFragment() {
         // Required empty public constructor
@@ -98,6 +100,7 @@ public class ClassifyFragment extends Fragment {
         });
 
         imgv=(ImageView)view.findViewById(R.id.classyimage);
+        rettext=view.findViewById(R.id.cls_ret);
         return view;
     }
 
@@ -119,6 +122,15 @@ public class ClassifyFragment extends Fragment {
         }
     }
 
+    public void showClassifyResult(String result){
+        try{
+            Log.d("show result","result:"+result);
+            //ImageView imgv= this.getView().findViewById(R.id.imageView);
+            rettext.setText(result);
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+    }
 
 
     @Override
