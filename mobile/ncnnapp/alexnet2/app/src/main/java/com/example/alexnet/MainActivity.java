@@ -43,12 +43,14 @@ import static java.lang.System.in;
 
 
 public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener , ClassifyFragment.OnFragmentInteractionListener{
+        implements NavigationView.OnNavigationItemSelectedListener , ClassifyFragment.OnFragmentInteractionListener,videodet.OnFragmentInteractionListener{
 
     private ClassifyFragment clsfragments;
-    FragmentManager fm;
+    private videodet localdetfragments;
+    private FragmentManager fm;
 
     private static final int FILE_SELECT_CODE = 520;
+    private static final int VIDEO_SELECT_CODE = 521;
     private static final int GET_PERMISSION = 520;
     private String image_path="";
 
@@ -166,14 +168,6 @@ public class MainActivity extends AppCompatActivity
         return cacheFile.getAbsolutePath();
     }
 
-    private void showAvailableBytes(InputStream in) {
-        try {
-            System.out.println("当前字节输入流中的字节数为:" + in.available());
-            Toast.makeText(this,"当前字节输入流中的字节数为:" + in.available(),  Toast.LENGTH_SHORT).show();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 
     @Override
     public void onBackPressed() {
@@ -210,12 +204,11 @@ public class MainActivity extends AppCompatActivity
     //==============================================
     // image-fragment
     public  void onFragmentInteraction(String uri){
-        Log.d("button", "button clicked,uri:"+uri);
-        Toast.makeText(this, "Clicked "+ uri, Toast.LENGTH_LONG).show();
+        Log.d("image button", "button clicked,uri:"+uri);
         if(uri=="select_image"){
 
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("*/*");//设置类型，我这里是任意类型，任意后缀的可以这样写。
+            intent.setType("image/*");//设置类型，我这里是任意类型，任意后缀的可以这样写。
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             try{
                 startActivityForResult(Intent.createChooser(intent,"请选择图片") ,FILE_SELECT_CODE);
@@ -238,6 +231,23 @@ public class MainActivity extends AppCompatActivity
 
     }
 
+    //============================================
+    //local video
+    public void localVideoInteraction(String message){
+        Log.d("video button", "button clicked,msg:"+message);
+        if(message==videodet.LOCAL_VIDEO_BUTTON_MSG){
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("video/*");//设置类型，我这里是任意类型，任意后缀的可以这样写。
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            try{
+                startActivityForResult(Intent.createChooser(intent,"请选择短视频") ,VIDEO_SELECT_CODE);
+            }catch (android.content.ActivityNotFoundException ex){
+                Toast.makeText(this, "亲，木有文件管理器啊-_-!!", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
  //  public String getSelectedImage(){
  //       return image_path;
   // }
@@ -253,14 +263,23 @@ public class MainActivity extends AppCompatActivity
         if (requestCode == FILE_SELECT_CODE) {
             Uri uri = data.getData();
             clsfragments.showImageNow(uri);
-            image_path=getRealPath2(uri);
+            image_path=getRealPath2(uri,"image");
 
+            Log.e("imge fragment", "onActivityResult() uri:"+uri.toString()+"path:"+uri.getPath());
             Toast.makeText(this, "图片路径"+image_path, Toast.LENGTH_SHORT).show();
+        }
+
+        if(requestCode==VIDEO_SELECT_CODE){
+            Uri uri = data.getData();
+            String video_path=getRealPath2(uri,"video");
+            localdetfragments.setVideoPath(video_path);
+            Log.e("local video fragment", "onActivityResult() uri:"+uri.toString()+"video-path:" + uri.getPath());
+            Toast.makeText(this, "视频路径"+video_path+" uri:"+uri.toString(), Toast.LENGTH_SHORT).show();
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    private  String getRealPath2( Uri uri) {
+    private  String getRealPath2( Uri uri, String type) {
 
         if (ContextCompat.checkSelfPermission(this,
                 Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -278,20 +297,35 @@ public class MainActivity extends AppCompatActivity
 
         // 使用':'分割
         String id = wholeID.split(":")[1];
+        Cursor cursor=null;
+        int columnIndex=0;
 
-        String[] projection = { MediaStore.Images.Media.DATA };
-        String selection = MediaStore.Images.Media._ID + "=?";
-        String[] selectionArgs = { id };
+        if (type=="image") {
+            String[] projection = {MediaStore.Images.Media.DATA};
+            String selection = MediaStore.Images.Media._ID + "=?";
+            String[] selectionArgs = {id};
 
-        Cursor cursor = this.getContentResolver().query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection,
-                selection, selectionArgs, null);
-        int columnIndex = cursor.getColumnIndex(projection[0]);
+            cursor = this.getContentResolver().query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection,
+                    selection, selectionArgs, null);
+            columnIndex = cursor.getColumnIndex(projection[0]);
+        }else if(type=="video"){
+            String[] projection = {MediaStore.Video.Media.DATA};
+            String selection = MediaStore.Video.Media._ID + "=?";
+            String[] selectionArgs = {id};
 
-        if (cursor.moveToFirst()) {
-            filePath = cursor.getString(columnIndex);
+            cursor = this.getContentResolver().query(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI, projection,
+                    selection, selectionArgs, null);
+            columnIndex = cursor.getColumnIndex(projection[0]);
         }
-        cursor.close();
+
+        if (cursor!=null&&cursor.moveToFirst()) {
+            filePath = cursor.getString(columnIndex);
+            cursor.close();
+        }
+
+        Log.e("getrealpath2", "filepath:"+filePath );
         return filePath;
     }
 
@@ -312,15 +346,18 @@ public class MainActivity extends AppCompatActivity
       }
 
 
+
+
     @SuppressWarnings("StatementWithEmptyBody")
     @Override
     public boolean onNavigationItemSelected(MenuItem item) {
         // Handle navigation view item clicks here.
         int id = item.getItemId();
         FragmentTransaction ft= fm.beginTransaction();
-
-        if (id == R.id.nav_home) {
-            // Handle the camera action
+        hideFragment(ft);
+        try{
+          if (id == R.id.nav_home) {
+            // Handle the action
             if (clsfragments==null){
                 clsfragments=new ClassifyFragment();
                 ft.add(R.id.ftshow,clsfragments);
@@ -329,26 +366,39 @@ public class MainActivity extends AppCompatActivity
                 ft.show(clsfragments);
             }
 
-        } else if (id == R.id.nav_gallery) {
+          } else if (id == R.id.nav_gallery) {
 
-        } else if (id == R.id.nav_slideshow) {
+                if (localdetfragments==null){
+                    localdetfragments=new videodet();
+                    ft.add(R.id.ftshow,localdetfragments);
 
-        } else if (id == R.id.nav_tools) {
+                }else{
+                    ft.show(localdetfragments);
+                }
 
+          } else if (id == R.id.nav_slideshow) {
+
+          } else if (id == R.id.nav_tools) {
+
+          }
+
+          DrawerLayout drawer = findViewById(R.id.drawer_layout);
+          drawer.closeDrawer(GravityCompat.START);
+
+          //add by clause
+          ft.commit();
+        }catch (Exception e){
+            e.printStackTrace();
         }
-
-        DrawerLayout drawer = findViewById(R.id.drawer_layout);
-        drawer.closeDrawer(GravityCompat.START);
-
-        //add by clause
-        ft.commit();
-
         return true;
     }
 
     private void hideFragment(FragmentTransaction ft) {
         if (clsfragments != null) {
             ft.hide(clsfragments);
+        }
+        if(localdetfragments!=null){
+            ft.hide(localdetfragments);
         }
 
     }
