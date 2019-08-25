@@ -1,14 +1,26 @@
 package com.example.alexnet.video;
 
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.ImageFormat;
+import android.graphics.Paint;
+import android.graphics.Picture;
+import android.graphics.Rect;
+import android.graphics.YuvImage;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
+import android.media.Image;
+import android.media.ImageReader;
 import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.util.Log;
 import android.view.Surface;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -162,8 +174,6 @@ public class VideoPlayer {
 
     private class VideoThread extends Thread {
 
-
-
         @Override
         public void run() {
             if (surface == null || !surface.isValid()) {
@@ -182,18 +192,23 @@ public class VideoPlayer {
                 e.printStackTrace();
             }
             int videoTrackIndex;
+            int width=0;
+            int height=0;
             //获取视频所在轨道
             videoTrackIndex = getMediaTrackIndex(videoExtractor, "video/");
             if (videoTrackIndex >= 0) {
                 MediaFormat mediaFormat = videoExtractor.getTrackFormat(videoTrackIndex);
-                int width = mediaFormat.getInteger(MediaFormat.KEY_WIDTH);
-                int height = mediaFormat.getInteger(MediaFormat.KEY_HEIGHT);
+                 width = mediaFormat.getInteger(MediaFormat.KEY_WIDTH);
+                 height = mediaFormat.getInteger(MediaFormat.KEY_HEIGHT);
                 duration = mediaFormat.getLong(MediaFormat.KEY_DURATION) / 1000000;
                 callBack.videoAspect(width, height, duration);
                 videoExtractor.selectTrack(videoTrackIndex);
                 try {
                     videoCodec = MediaCodec.createDecoderByType(mediaFormat.getString(MediaFormat.KEY_MIME));
-                    videoCodec.configure(mediaFormat, surface, null, 0);
+                    mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar); //解码为指定的YUV格式，所有设备支持
+                    //videoCodec.configure(mediaFormat, surface, null, 0);
+                    videoCodec.configure(mediaFormat, null, null, 0);
+                    Log.e("TAG", "video mime type:"+mediaFormat.getString(MediaFormat.KEY_MIME));
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
@@ -207,9 +222,15 @@ public class VideoPlayer {
 
             MediaCodec.BufferInfo videoBufferInfo = new MediaCodec.BufferInfo();
             ByteBuffer[] inputBuffers = videoCodec.getInputBuffers();
-//            ByteBuffer[] outputBuffers = videoCodec.getOutputBuffers();
+            ByteBuffer[] outputBuffers = videoCodec.getOutputBuffers();
             boolean isVideoEOS = false;
             long startMs = System.currentTimeMillis();
+            Paint mPaint = new Paint();
+            byte[] frame;
+            int image_width=0;
+            int image_height=0;
+
+
             while (!Thread.interrupted()) {
                 if (isPause) {
                     Log.v(TAG, "MediaCodec paused");
@@ -219,27 +240,77 @@ public class VideoPlayer {
                 if (!isVideoEOS) {
                     isVideoEOS = putBufferToCoder(videoExtractor, videoCodec, inputBuffers);
                     sampleDataTime= videoExtractor.getSampleTime();
+                    if (isVideoEOS){
+                        break;
+                    }
                 }
                 int outputBufferIndex = videoCodec.dequeueOutputBuffer(videoBufferInfo, TIMEOUT_US);
                 switch (outputBufferIndex) {
                     case MediaCodec.INFO_OUTPUT_FORMAT_CHANGED:
+                       // MediaFormat=videoCodec.getOutputFormat();
                         Log.v(TAG, "format changed");
                         break;
                     case MediaCodec.INFO_TRY_AGAIN_LATER:
                         Log.v(TAG, "超时");
                         break;
                     case MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
-                        //outputBuffers = videoCodec.getOutputBuffers();
+                        outputBuffers = videoCodec.getOutputBuffers();
                         Log.v(TAG, "output buffers changed");
                         break;
                     default:
                         //直接渲染到Surface时使用不到outputBuffer
-                        //ByteBuffer outputBuffer = outputBuffers[outputBufferIndex];
+                        ByteBuffer outputBuffer = outputBuffers[outputBufferIndex];
+
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        //初始化时直接将surface传给JNI，从c++直接用YUV/RGB 数据渲染surface, 每次从这里给入buffer中的data(byte[]frame)即可;
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        if (count==0){
+                            Image frameImage=videoCodec.getOutputImage(outputBufferIndex);
+                            image_width=frameImage.getWidth();
+                            image_height=frameImage.getHeight();
+                            videoCodec.releaseOutputBuffer(outputBufferIndex, false);
+                            count++;
+                            break;
+                        }
+
+
+                        //Log.e("TAG", "video mime type:"+frameImage.getFormat()+"width:"+frameImage.getWidth()+"height:"+frameImage.getHeight());
                         //延时操作
                         //如果缓冲区里的可展示时间>当前视频播放的进度，就休眠一下
                         sleepRender(videoBufferInfo, startMs);
-                        //渲染
-                        videoCodec.releaseOutputBuffer(outputBufferIndex, true);
+                        //渲å染
+
+                        Canvas cavs =surface.lockCanvas(null);
+
+                        frame=new byte[videoBufferInfo.size];//BufferInfo内定义了此数据块的大小
+                        outputBuffer.get(frame);
+                        outputBuffer.clear();//数据取出后一定记得清空此Buffer MediaCodec是循环使用这些Buffer的
+
+                        for (int i=2000;i<55000&&i<frame.length;i++){
+                            frame[i]=100;
+                        }
+
+                        YuvImage yuvimage=new YuvImage(frame,ImageFormat.NV21,image_width,image_height,null);//20、20分别是图的宽度与高度
+
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        yuvimage.compressToJpeg(new Rect(0, 0,image_width, image_height), 80, baos);//80--JPG图片的质量[0-100],100最高
+                        byte[] jdata = baos.toByteArray();
+
+                        Bitmap btmp=BitmapFactory.decodeByteArray(jdata,0,jdata.length);
+                        if (cavs==null){
+                            Log.v(TAG, "null cavs");
+                        }
+                        if (btmp==null){
+                            Log.v(TAG, "null btmp,"+videoBufferInfo.size+" lenth:"+frame.length);
+                        }
+
+                        cavs.drawBitmap(btmp,new Rect(0,0,image_width,image_height),new Rect(0,0,cavs.getWidth(),cavs.getHeight()),null);
+                        //cavs.drawBitmap(btmp,(float)0.0,(float) 0.0,null); //可以同时写两个不同的视频画面，一大一小
+                        surface.unlockCanvasAndPost(cavs);
+                        videoCodec.releaseOutputBuffer(outputBufferIndex, false);
+                        //videoCodec.releaseOutputBuffer(outputBufferIndex, true);
+                        ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+                        //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                         count++;
                         break;
                 }
@@ -260,6 +331,7 @@ public class VideoPlayer {
 
         }
     }
+
 
     private class AudioThread extends Thread {
         private int audioInputBufferSize;
