@@ -20,7 +20,7 @@ public:
 
 private:
     std::vector<std::string> loadLabels(const char* label_file );
-    int run(ncnn::Mat& in, const float mean[],std::vector<std::pair<size_t,float >>& out);
+    int run(ncnn::Mat& in, const float mean[],std::vector<std::pair<size_t,float > >& out);
 
 private:
     ncnn::Net* net;

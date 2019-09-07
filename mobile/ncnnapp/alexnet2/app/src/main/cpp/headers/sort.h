@@ -9,7 +9,7 @@
 #include <vector>
 
 template <typename T>
-std::vector<std::pair<std::size_t,T>> sort_indexs(const std::vector<T>&v);
+std::vector<std::pair<std::size_t,T> > sort_indexs(const std::vector<T>&v);
 bool cmp(std::pair<std::size_t,float>& i1, std::pair<std::size_t,float>& i2);
 
 //导致重复定义
@@ -19,9 +19,9 @@ bool cmp(std::pair<std::size_t,float>& i1, std::pair<std::size_t,float>& i2);
 
 
 template <typename T>
-std::vector<std::pair<std::size_t,T>> sort_indexs(const std::vector<T>&v){
+std::vector<std::pair<std::size_t,T> > sort_indexs(const std::vector<T>&v){
 
-    std::vector<std::pair<std::size_t,T>> nv(v.size());
+    std::vector<std::pair<std::size_t,T> > nv(v.size());
     for (std::size_t i=0;i<v.size();i++){
         nv[i]=std::make_pair(i,v[i]);
     }

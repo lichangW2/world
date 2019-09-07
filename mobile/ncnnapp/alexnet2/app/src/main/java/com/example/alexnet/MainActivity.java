@@ -43,14 +43,16 @@ import static java.lang.System.in;
 
 
 public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener , ClassifyFragment.OnFragmentInteractionListener,videodet.OnFragmentInteractionListener{
+        implements NavigationView.OnNavigationItemSelectedListener , ClassifyFragment.OnFragmentInteractionListener,videodet.OnFragmentInteractionListener,videofdet.OnFragmentInteractionListener{
 
     private ClassifyFragment clsfragments;
     private videodet localdetfragments;
+    private videofdet fdetfragments;
     private FragmentManager fm;
 
     private static final int FILE_SELECT_CODE = 520;
     private static final int VIDEO_SELECT_CODE = 521;
+    private static final int FVIDEO_SELECT_CODE = 522;
     private static final int GET_PERMISSION = 520;
     private String image_path="";
 
@@ -247,10 +249,21 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    //=============================================
 
- //  public String getSelectedImage(){
- //       return image_path;
-  // }
+    public void onVideofdetFragmentInteraction(String message){
+        Log.d("fvideo button", "button clicked,msg:"+message);
+        if(message==videofdet.FVIDEO_BUTTON_MSG){
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("video/*");//设置类型，我这里是任意类型，任意后缀的可以这样写。
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            try{
+                startActivityForResult(Intent.createChooser(intent,"请选择短视频") ,FVIDEO_SELECT_CODE);
+            }catch (android.content.ActivityNotFoundException ex){
+                Toast.makeText(this, "亲，木有文件管理器啊-_-!!", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -274,6 +287,14 @@ public class MainActivity extends AppCompatActivity
             String video_path=getRealPath2(uri,"video");
             localdetfragments.setVideoPath(video_path);
             Log.e("local video fragment", "onActivityResult() uri:"+uri.toString()+"video-path:" + uri.getPath());
+            Toast.makeText(this, "视频路径"+video_path+" uri:"+uri.toString(), Toast.LENGTH_SHORT).show();
+        }
+
+        if(requestCode==FVIDEO_SELECT_CODE){
+            Uri uri = data.getData();
+            String video_path=getRealPath2(uri,"video");
+            fdetfragments.setVideoPath(video_path);
+            Log.e("fvideo fragment", "onActivityResult() uri:"+uri.toString()+"video-path:" + uri.getPath());
             Toast.makeText(this, "视频路径"+video_path+" uri:"+uri.toString(), Toast.LENGTH_SHORT).show();
         }
         super.onActivityResult(requestCode, resultCode, data);
@@ -346,8 +367,6 @@ public class MainActivity extends AppCompatActivity
       }
 
 
-
-
     @SuppressWarnings("StatementWithEmptyBody")
     @Override
     public boolean onNavigationItemSelected(MenuItem item) {
@@ -377,6 +396,13 @@ public class MainActivity extends AppCompatActivity
                 }
 
           } else if (id == R.id.nav_slideshow) {
+              if (fdetfragments==null){
+                  fdetfragments=new videofdet();
+                  ft.add(R.id.ftshow,fdetfragments);
+
+              }else{
+                  ft.show(fdetfragments);
+              }
 
           } else if (id == R.id.nav_tools) {
 
@@ -399,6 +425,9 @@ public class MainActivity extends AppCompatActivity
         }
         if(localdetfragments!=null){
             ft.hide(localdetfragments);
+        }
+        if(fdetfragments!=null){
+            ft.hide(fdetfragments);
         }
 
     }

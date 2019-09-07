@@ -2,7 +2,7 @@ package com.example.alexnet;
 
 public class netlib {
     static {
-        System.loadLibrary("native-lib");
+        System.loadLibrary("classify-lib");
     }
 
     public native String stringFromJNI();
