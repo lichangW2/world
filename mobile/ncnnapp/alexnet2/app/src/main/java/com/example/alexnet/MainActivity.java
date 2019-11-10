@@ -2,6 +2,7 @@ package com.example.alexnet;
 
 
 
+import com.example.alexnet.face.process.FaceProcess;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.snackbar.Snackbar;
 import com.google.android.material.navigation.NavigationView;
@@ -51,6 +52,7 @@ public class MainActivity extends AppCompatActivity
     private FragmentManager fm;
 
     private static final int FILE_SELECT_CODE = 520;
+    private static final int LOCAL_FILE_SELECT_CODE = 523;
     private static final int VIDEO_SELECT_CODE = 521;
     private static final int FVIDEO_SELECT_CODE = 522;
     private static final int GET_PERMISSION = 520;
@@ -108,10 +110,12 @@ public class MainActivity extends AppCompatActivity
                         Log.d("asserts path", "model path:"+model_path);
                         Log.d("asserts path", "param path:"+param_path);
                         Log.d("asserts path", "label path:"+label_path);
+                        Log.d("classify", "label path:"+net.stringFromJNI());
                         net_env=net.initEnv(model_path,param_path,label_path,mean,3,target_size);
+                        Log.d("classify", "label path");
                         //清除缓存
                         File mofile=new File(model_path);
-                        if(mofile.exists()){
+                       if(mofile.exists()){
                             Log.d("remove model data", "model path:"+mofile.delete());
 
                         }
@@ -247,6 +251,17 @@ public class MainActivity extends AppCompatActivity
                 Toast.makeText(this, "亲，木有文件管理器啊-_-!!", Toast.LENGTH_SHORT).show();
             }
         }
+        if(message==videodet.LOCAL_IMAGE_BUTTON_MSG){
+
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");//设置类型，我这里是任意类型，任意后缀的可以这样写。
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            try{
+                startActivityForResult(Intent.createChooser(intent,"请选择图片") ,LOCAL_FILE_SELECT_CODE);
+            }catch (android.content.ActivityNotFoundException ex){
+                Toast.makeText(this, "亲，木有文件管理器啊-_-!!", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     //=============================================
@@ -282,6 +297,15 @@ public class MainActivity extends AppCompatActivity
             Toast.makeText(this, "图片路径"+image_path, Toast.LENGTH_SHORT).show();
         }
 
+        if (requestCode == LOCAL_FILE_SELECT_CODE) {
+            Uri uri = data.getData();
+            String image_path=getRealPath2(uri,"image");
+            localdetfragments.targetDetect(image_path);
+
+            Log.e("local target", "onActivityResult() uri:"+uri.toString()+"path:"+uri.getPath());
+            Toast.makeText(this, "图片路径"+image_path, Toast.LENGTH_SHORT).show();
+        }
+
         if(requestCode==VIDEO_SELECT_CODE){
             Uri uri = data.getData();
             String video_path=getRealPath2(uri,"video");
@@ -297,6 +321,8 @@ public class MainActivity extends AppCompatActivity
             Log.e("fvideo fragment", "onActivityResult() uri:"+uri.toString()+"video-path:" + uri.getPath());
             Toast.makeText(this, "视频路径"+video_path+" uri:"+uri.toString(), Toast.LENGTH_SHORT).show();
         }
+
+
         super.onActivityResult(requestCode, resultCode, data);
     }
 
@@ -349,6 +375,9 @@ public class MainActivity extends AppCompatActivity
         Log.e("getrealpath2", "filepath:"+filePath );
         return filePath;
     }
+
+
+    //==============================================
 
     @Override
      public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {

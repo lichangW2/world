@@ -1,13 +1,16 @@
 package com.example.alexnet.video;
 
 import android.content.Context;
-import android.opengl.GLSurfaceView;
+import android.media.FaceDetector;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.MediaController;
+import android.widget.TextView;
+
+import com.example.alexnet.face.process.FaceProcess;
 
 public class PlayerView extends SurfaceView implements MediaController.MediaPlayerControl,IPlayerCallBack {
 
@@ -27,14 +30,26 @@ public class PlayerView extends SurfaceView implements MediaController.MediaPlay
 
     public PlayerView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        init();
+        //init();
     }
 
-    private void init() {
-        mVideoPlayer = new VideoPlayer(this.getHolder().getSurface());
+    public void init( SurfaceView tg, TextView tgtxt, SurfaceView ret, TextView rettxt) {
+        if (tg==null||tgtxt==null||ret==null||rettxt==null){
+            Log.d("playerview","init  failed");
+            return;
+        }
+        Log.d("playerview","init");
+        //this.getHolder().getSurface() Surface和SurfaceView
+        mVideoPlayer = new VideoPlayer(tg,tgtxt,ret,rettxt,this,"");
+        Log.d("playerview","init after");
+
         mVideoPlayer.setCallBack(this);
         mMediaController = new MediaController(getContext());
         mMediaController.setMediaPlayer(this);
+    }
+
+    public void TargetDetect(String path){
+        mVideoPlayer.targetDetect(path);
     }
 
     private void attachMediaController() {
@@ -101,6 +116,11 @@ public class PlayerView extends SurfaceView implements MediaController.MediaPlay
     public void pause() {
         Log.e("playview", "pause" );
         mVideoPlayer.pause();
+    }
+
+    public void stop(){
+        Log.e("playview", "stop" );
+        mVideoPlayer.stop();
     }
 
     @Override

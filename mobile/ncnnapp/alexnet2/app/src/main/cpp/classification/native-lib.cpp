@@ -30,9 +30,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_example_alexnet_netlib_initEnv
        const char* clabel = jenv->GetStringUTFChars(jlabel,JNI_FALSE);
 
        jfloat* cmean=jenv->GetFloatArrayElements(jmean,JNI_FALSE);
-
        Env* _infer_env=new Env(cmodel,cparam,clabel,cmean,jinput_size);
-
        jenv->ReleaseFloatArrayElements(jmean,cmean,0);
        jenv->ReleaseStringUTFChars(jmodel,cmodel);
        jenv->DeleteLocalRef(jmodel);
@@ -40,7 +38,7 @@ extern "C" JNIEXPORT jlong JNICALL Java_com_example_alexnet_netlib_initEnv
        jenv->DeleteLocalRef(jparam);
        jenv->ReleaseStringUTFChars(jlabel,clabel);
        jenv->DeleteLocalRef(jlabel);
-    LOGI("init finished env_ptr:%d",_infer_env);
+    LOGI("init classifier finished env_ptr:%d",_infer_env);
     return (jlong)_infer_env;
 }
 

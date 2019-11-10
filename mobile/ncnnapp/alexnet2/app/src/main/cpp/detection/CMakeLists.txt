@@ -79,7 +79,7 @@ set(NCNN_DIR /Users/clausewang/Personal/mobile/ncnn/build-android-armv7/install)
 #for os
 #set(NCNN_DIR /Users/clausewang/Personal/mobile/ncnn/build/install)
 message("ncnn path: ${NCNN_DIR}")
-include_directories(${NCNN_DIR}/include)
+include_directories(${NCNN_DIR}/include/ncnn)
 #for android
 find_library(NCNN_LIBS ncnn NAMES libncnn.a PATHS /Users/clausewang/Personal/mobile/ncnn/build-android-armv7/install/)
 #for macos

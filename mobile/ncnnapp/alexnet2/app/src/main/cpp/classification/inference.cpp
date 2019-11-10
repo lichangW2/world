@@ -15,15 +15,19 @@
 
 #include "sort.h"
 #include "inference.h"
+#include "utils.h"
 
 using namespace std;
 
 Env::Env(const char* model, const char* param, const char* label, float *mean, int input_size) {
 
     this->net=new(ncnn::Net);
-    this->net->load_param(param);
-    this->net->load_model(model);
+    int load_p_su=this->net->load_param(param);
+    LOGI("load classify param:%d",load_p_su);
+    //int load_b_su=this->net->load_model(model);
+    //LOGI("load classify  model:%d",load_b_su);
     this->labels=loadLabels(label);
+    LOGI("load classify label:%d",this->labels.size());
     this->input_size=input_size;
 
     this->mean[0]=mean[0];
@@ -33,6 +37,7 @@ Env::Env(const char* model, const char* param, const char* label, float *mean, i
 
 
 Env::~Env() {
+    this->net->clear();
     delete this->net;
 }
 

@@ -5,20 +5,22 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.ImageFormat;
 import android.graphics.Paint;
-import android.graphics.Picture;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.Image;
-import android.media.ImageReader;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
 import android.media.MediaExtractor;
 import android.media.MediaFormat;
 import android.util.Log;
 import android.view.Surface;
+import android.view.SurfaceView;
+import android.widget.TextView;
+
+import com.example.alexnet.face.process.FaceProcess;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -34,19 +36,19 @@ public class VideoPlayer {
     private boolean isPlaying;
     private boolean isPause;
     private String filePath;
-    private Surface surface;
+
     private long sampleDataTime;
-    private long count;
+    private int count;
     private long duration;
 
-    public VideoPlayer(Surface surface, String filePath) {
-        this.surface = surface;
+    private FaceProcess faceprocess;
+
+    public VideoPlayer(SurfaceView tg, TextView tg_txt, SurfaceView trace_ret, TextView ret_txt, SurfaceView videoView, String filePath) {
+        Log.d("local init", "create videoplayer");
+        faceprocess=new FaceProcess();
+        faceprocess.InitEnv(tg,trace_ret,videoView,ret_txt);
         this.filePath = filePath;
         isPause=false;
-    }
-
-    public VideoPlayer(Surface surface) {
-        this.surface = surface;
     }
 
     public void setFilePath(String filePath) {
@@ -64,6 +66,10 @@ public class VideoPlayer {
         return isPlaying;
     }
 
+    public void targetDetect(String path){
+        faceprocess.DetAndShow(path);
+    }
+
     public void play() {
         if (filePath==null|| filePath.isEmpty()){
             Log.e("local video start", "please provide video");
@@ -71,7 +77,7 @@ public class VideoPlayer {
         }
         isPlaying=true;
         if(isPause){
-
+            faceprocess.Pause();
             isPause=false;
             return;
         }
@@ -88,6 +94,7 @@ public class VideoPlayer {
         sampleDataTime=0;
         count=0;
         duration=0;
+        faceprocess.Start();
         videoThread.start();
         audioThread.start();
     }
@@ -96,11 +103,13 @@ public class VideoPlayer {
         if(isPlaying==true){
             isPlaying=false;
             isPause = true;
+            faceprocess.Pause();
         }
     }
     public void stop() {
         isPause=false;
         isPlaying = false;
+        faceprocess.Stop(0);
         destroy();
     }
 
@@ -124,6 +133,14 @@ public class VideoPlayer {
          }
          return (int)percent;
     }
+    private void showSupportedColorFormat(MediaCodecInfo.CodecCapabilities caps) {
+        System.out.print("supported color format: ");
+        for (int c : caps.colorFormats) {
+            System.out.print(c + "\t");
+        }
+        System.out.println();
+    }
+
 
     /*将缓冲区传递至解码器
      * 如果到了文件末尾，返回true;否则返回false
@@ -176,8 +193,8 @@ public class VideoPlayer {
 
         @Override
         public void run() {
-            if (surface == null || !surface.isValid()) {
-                Log.e("TAG", "surface invalid!");
+            if (faceprocess == null) {
+                Log.e("TAG", "faceprocess invalid!");
                 return;
             }
             if (filePath.isEmpty()) {
@@ -205,7 +222,9 @@ public class VideoPlayer {
                 videoExtractor.selectTrack(videoTrackIndex);
                 try {
                     videoCodec = MediaCodec.createDecoderByType(mediaFormat.getString(MediaFormat.KEY_MIME));
+                    showSupportedColorFormat(videoCodec.getCodecInfo().getCapabilitiesForType(mediaFormat.getString(MediaFormat.KEY_MIME)));
                     mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar); //解码为指定的YUV格式，所有设备支持
+                    //mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatRGBFlexible);
                     //videoCodec.configure(mediaFormat, surface, null, 0);
                     videoCodec.configure(mediaFormat, null, null, 0);
                     Log.e("TAG", "video mime type:"+mediaFormat.getString(MediaFormat.KEY_MIME));
@@ -227,6 +246,7 @@ public class VideoPlayer {
             long startMs = System.currentTimeMillis();
             Paint mPaint = new Paint();
             byte[] frame;
+            int chcnt=0;
             int image_width=0;
             int image_height=0;
 
@@ -234,7 +254,16 @@ public class VideoPlayer {
             while (!Thread.interrupted()) {
                 if (isPause) {
                     Log.v(TAG, "MediaCodec paused");
+                    try{
+                        sleep(300);
+                    }catch (Exception e){
+                        Log.v(TAG, "MediaCodec video sleep failed");
+                        e.printStackTrace();
+                    }
                     continue;
+                }
+                if(!isPlaying&&!isPause){
+                    break;
                 }
                 //将资源传递到解码器
                 if (!isVideoEOS) {
@@ -264,15 +293,6 @@ public class VideoPlayer {
                         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                         //初始化时直接将surface传给JNI，从c++直接用YUV/RGB 数据渲染surface, 每次从这里给入buffer中的data(byte[]frame)即可;
                         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-                        if (count==0){
-                            Image frameImage=videoCodec.getOutputImage(outputBufferIndex);
-                            image_width=frameImage.getWidth();
-                            image_height=frameImage.getHeight();
-                            videoCodec.releaseOutputBuffer(outputBufferIndex, false);
-                            count++;
-                            break;
-                        }
-
 
                         //Log.e("TAG", "video mime type:"+frameImage.getFormat()+"width:"+frameImage.getWidth()+"height:"+frameImage.getHeight());
                         //延时操作
@@ -280,33 +300,65 @@ public class VideoPlayer {
                         sleepRender(videoBufferInfo, startMs);
                         //渲å染
 
-                        Canvas cavs =surface.lockCanvas(null);
+                       /// if (count==0){
+                            Image frameImage=videoCodec.getOutputImage(outputBufferIndex);
+                            if(frameImage!=null){
+                                //YUV 420_888转RGBA https://stackoverflow.com/questions/30510928/convert-android-camera2-api-yuv-420-888-to-rgb
+                                width = frameImage.getWidth();
+                                height = frameImage.getHeight();
 
-                        frame=new byte[videoBufferInfo.size];//BufferInfo内定义了此数据块的大小
-                        outputBuffer.get(frame);
-                        outputBuffer.clear();//数据取出后一定记得清空此Buffer MediaCodec是循环使用这些Buffer的
+                                ByteBuffer yBuffer = frameImage.getPlanes()[0].getBuffer();
+                                ByteBuffer uBuffer = frameImage.getPlanes()[1].getBuffer();
+                                ByteBuffer vBuffer = frameImage.getPlanes()[2].getBuffer();
 
-                        for (int i=2000;i<55000&&i<frame.length;i++){
-                            frame[i]=100;
-                        }
+                                int ySize = yBuffer.remaining();
+                                int uSize = uBuffer.remaining();
+                                int vSize = vBuffer.remaining();
 
-                        YuvImage yuvimage=new YuvImage(frame,ImageFormat.NV21,image_width,image_height,null);//20、20分别是图的宽度与高度
+                                frame=new byte[ySize+uSize+vSize];
 
-                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                        yuvimage.compressToJpeg(new Rect(0, 0,image_width, image_height), 80, baos);//80--JPG图片的质量[0-100],100最高
-                        byte[] jdata = baos.toByteArray();
+                                //U and V are swapped
+                                yBuffer.get(frame, 0, ySize);
+                                vBuffer.get(frame, ySize, vSize);
+                                uBuffer.get(frame, ySize + vSize, uSize);
+                                faceprocess.FaceDetAndCompAndDraw(frame,width,height,count);
 
-                        Bitmap btmp=BitmapFactory.decodeByteArray(jdata,0,jdata.length);
-                        if (cavs==null){
-                            Log.v(TAG, "null cavs");
-                        }
-                        if (btmp==null){
-                            Log.v(TAG, "null btmp,"+videoBufferInfo.size+" lenth:"+frame.length);
-                        }
+                                Log.d(TAG, " width:"+ width + "height:" + height +"planes:"+frameImage.getPlanes().length+"format:" + frameImage.getFormat()+"count:"+count+"size:"+(ySize + vSize+uSize));
+                                frameImage.close();
+                            }
 
-                        cavs.drawBitmap(btmp,new Rect(0,0,image_width,image_height),new Rect(0,0,cavs.getWidth(),cavs.getHeight()),null);
+                         //   videoCodec.releaseOutputBuffer(outputBufferIndex, false);
+                         //   count++;
+                        //    break;
+                       // }
+
+                        ///Canvas cavs =surface.lockCanvas(null);
+
+                        ///frame=new byte[videoBufferInfo.size];//BufferInfo内定义了此数据块的大小
+                        ///outputBuffer.get(frame);
+                        ///outputBuffer.clear();//数据取出后一定记得清空此Buffer MediaCodec是循环使用这些Buffer的
+                        ///faceprocess.FaceDetAndCompAndDraw(frame,width,height);
+                        ///for (int i=2000;i<55000&&i<frame.length;i++){
+                        ///    frame[i]=100;
+                        ///}
+
+                        ///YuvImage yuvimage=new YuvImage(frame,ImageFormat.NV21,image_width,image_height,null);//20、20分别是图的宽度与高度
+
+                        ///ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                        ///yuvimage.compressToJpeg(new Rect(0, 0,image_width, image_height), 80, baos);//80--JPG图片的质量[0-100],100最高
+                        ///byte[] jdata = baos.toByteArray();
+
+                        ///Bitmap btmp=BitmapFactory.decodeByteArray(jdata,0,jdata.length);
+                        ///if (cavs==null){
+                        ///    Log.v(TAG, "null cavs");
+                        ///}
+                        ///if (btmp==null){
+                        ///    Log.v(TAG, "null btmp,"+videoBufferInfo.size+" lenth:"+frame.length);
+                        ///}
+
+                        ///cavs.drawBitmap(btmp,new Rect(0,0,image_width,image_height),new Rect(0,0,cavs.getWidth(),cavs.getHeight()),null);
                         //cavs.drawBitmap(btmp,(float)0.0,(float) 0.0,null); //可以同时写两个不同的视频画面，一大一小
-                        surface.unlockCanvasAndPost(cavs);
+                        ///surface.unlockCanvasAndPost(cavs);
                         videoCodec.releaseOutputBuffer(outputBufferIndex, false);
                         //videoCodec.releaseOutputBuffer(outputBufferIndex, true);
                         ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,11 +368,13 @@ public class VideoPlayer {
                 }
 
                 if ((videoBufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    Log.v(TAG, "buffer stream end");
+                    Log.v(TAG, "video buffer stream end");
+                    faceprocess.Stop(1);
                     break;
                 }
             }//end while
             try {
+                faceprocess.Stop(1);
                 videoCodec.stop();
                 videoCodec.release();
                 videoExtractor.release();
@@ -401,6 +455,9 @@ public class VideoPlayer {
                 if (isPause) {
                     continue;
                 }
+                if(!isPause&&!isPlaying){
+                    break;
+                }
                 if (!isAudioEOS) {
                     isAudioEOS = putBufferToCoder(audioExtractor, audioCodec, inputBuffers);
                 }
@@ -438,7 +495,7 @@ public class VideoPlayer {
                 }
 
                 if ((audioBufferInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-                    Log.v(TAG, "buffer stream end");
+                    Log.v(TAG, "audio buffer stream end");
                     break;
                 }
             }//end while

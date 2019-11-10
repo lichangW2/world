@@ -13,3 +13,4 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=format-security -Wno-error=po
 
 add_subdirectory(classification)
 add_subdirectory(detection)
+add_subdirectory(insightface)
