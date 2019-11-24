@@ -1,0 +1,60 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 29
+    buildToolsVersion "29.0.1"
+    defaultConfig {
+        applicationId "com.example.deepln"
+        minSdkVersion 24
+        targetSdkVersion 29
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                // Passes optional arguments to CMake.
+                //arguments "-DANDROID_ARM_NEON=TRUE", "-DANDROID_TOOLCHAIN=clang", "-DANDROID_STL=c++_static"
+
+                // Sets optional flags for the C compiler.
+                cFlags "-fopenmp"
+
+                // Sets a flag to enable format macro constants for the C++ compiler.
+                cppFlags "-std=c++11", "-D__STDC_FORMAT_MACROS", "-fopenmp", "-frtti", "-fexceptions"
+                // Sets ABI(platforms)
+                abiFilters "armeabi-v7a" //"x86", 'armeabi-v7a', 'arm64-v8a',"x86_64"
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ["src/main/jlibs"]
+            //由cmake生成的share lib 会自动打包不需要指定位置；这里加载外部依赖.so(即三方动态库，因为动态库运行时链接所以必须加载到apk)，必须在二级目录下且二级目录名必须是abiFilters中的一个，非.so后缀的文件不会被打进去。
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.10.2"
+        }
+    }
+
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.1.0'
+    implementation 'com.google.android.material:material:1.0.0'
+    implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'androidx.test:runner:1.2.0'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.1.1'
+}
